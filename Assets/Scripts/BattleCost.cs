@@ -8,11 +8,20 @@ public sealed class BattleCost : MonoBehaviour
 
     public CostLedger Ledger { get; private set; }
 
-    void Awake() => Ledger = new CostLedger(totalSupply, secondsPerPoint);
+    void Awake()
+    {
+        if (FindObjectOfType<BattleStage>() == null)
+        {
+            enabled = false;
+            return;
+        }
+        Ledger = new CostLedger(totalSupply, secondsPerPoint);
+    }
     void Update() => Ledger.Tick(Time.deltaTime);
 
-    public bool CanAfford(int amount) => Ledger.CanAfford(amount);
-    public bool TrySpend(int amount) => Ledger.TrySpend(amount);
+    public bool CanAfford(int amount) => Ledger != null && Ledger.CanAfford(amount);
+    public bool TrySpend(int amount) => Ledger != null && Ledger.TrySpend(amount);
+    public void SetHudVisible(bool visible) => showHud = visible;
 
     void OnGUI()
     {

@@ -67,6 +67,16 @@ public sealed class SoldierPool : MonoBehaviour
         return soldier;
     }
 
+    public UnitStats GetUnitStats(int unitId)
+    {
+        if (initialized)
+            return byId.TryGetValue(unitId, out var entry) ? entry.prefab.GetComponent<UnitStats>() : null;
+        foreach (var entry in entries)
+            if (entry != null && entry.unitId == unitId && entry.prefab != null)
+                return entry.prefab.GetComponent<UnitStats>();
+        return null;
+    }
+
     public bool Despawn(GameObject soldier)
     {
         if (soldier == null) return false;
@@ -87,6 +97,7 @@ public sealed class SoldierPool : MonoBehaviour
         soldier.SetActive(false);
         var member = soldier.GetComponent<PooledSoldier>();
         if (member == null) member = soldier.AddComponent<PooledSoldier>();
+        if (soldier.GetComponent<UnitCombat>() == null) soldier.AddComponent<UnitCombat>();
         member.Owner = this;
         member.UnitId = entry.unitId;
         member.IsRented = false;
