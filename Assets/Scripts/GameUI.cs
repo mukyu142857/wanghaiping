@@ -16,13 +16,15 @@ public sealed class GameUI : MonoBehaviour
     readonly Color accent = new Color(.23f,.40f,.47f);
     Font font;
     Canvas canvas;
-    GameObject menu, select, route, intro, battle, pause, result;
+    GameObject menu, select, intro, battle, pause, result, roundComplete;
     Text introTitle, introBody, resultTitle, resultBody, costText;
+    Text roundText;
     Button[] unitButtons = new Button[4];
-    int stageIndex, levelIndex = 1;
+    int stageIndex;
     BattleStage stage;
     BattleCost cost;
     SoldierPool pool;
+    BattleRoundManager roundManager;
     string order = "防御";
 
     void Awake()
@@ -57,7 +59,7 @@ public sealed class GameUI : MonoBehaviour
     {
         for (int i = transform.childCount - 1; i >= 0; i--)
             if (transform.GetChild(i).name == "UI Canvas") DestroyImmediate(transform.GetChild(i).gameObject);
-        menu = select = route = intro = battle = pause = result = null;
+        menu = select = intro = battle = pause = result = roundComplete = null;
         font = Application.isPlaying
             ? Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 26)
             : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -78,20 +80,22 @@ public sealed class GameUI : MonoBehaviour
                 var prefab = Resources.Load<GameObject>("SoldierPool");
                 if (prefab != null) pool = Instantiate(prefab).GetComponent<SoldierPool>();
             }
-            if (Application.isPlaying && stage != null && pool != null)
+            if (Application.isPlaying && stage != null && pool != null && cost != null)
             {
                 var previewUnits = stage.transform.Find("Unit Lineup Preview");
                 if (previewUnits != null) previewUnits.gameObject.SetActive(false);
                 var spawner = GetComponent<EnemySpawner>();
                 if (spawner == null) spawner = gameObject.AddComponent<EnemySpawner>();
-                spawner.Initialize(stage, pool);
+                roundManager = GetComponent<BattleRoundManager>();
+                if (roundManager == null) roundManager = gameObject.AddComponent<BattleRoundManager>();
+                roundManager.Initialize(stage, cost, spawner, this);
             }
             BuildBattle();
             Show(battle);
         }
         else
         {
-            BuildMenu(); BuildSelect(); BuildRoute(); BuildIntro();
+            BuildMenu(); BuildSelect(); BuildIntro();
             Show(menu);
         }
     }
@@ -110,7 +114,9 @@ public sealed class GameUI : MonoBehaviour
     {
         if (!battleMode || battle == null || !battle.activeSelf) return;
         if (costText != null && cost != null && cost.Ledger != null)
-            costText.text = $"费用 {cost.Ledger.Current}  /  总回复 {cost.Ledger.Generated}/50";
+            costText.text = $"费用 {cost.Ledger.Current}  /  总回复 {cost.Ledger.Generated}/{cost.Ledger.TotalSupply}";
+        if (roundText != null && roundManager != null)
+            roundText.text = $"第 {roundManager.Round}/4 回合  {roundManager.Goal}{roundManager.ObjectiveStatus}  堡垒 {roundManager.PlayerFortressHealth}";
         if (stage == null || cost == null || cost.Ledger == null) return;
         for (int i = 0; i < unitButtons.Length; i++)
         {
@@ -160,19 +166,7 @@ public sealed class GameUI : MonoBehaviour
         for (int i = 0; i < 4; i++)
         {
             int index = i;
-            Button(select.transform, StageNames[i], new Vector2(830,290), positions[i], () => { stageIndex = index; Show(route); }, 70);
-        }
-    }
-
-    void BuildRoute()
-    {
-        route = Screen("关卡路线");
-        Button(route.transform, "↶", new Vector2(100,100), new Vector2(-855,460), () => Show(select), 52);
-        var positions = new[] { new Vector2(-700,-260), new Vector2(-235,190), new Vector2(235,-100), new Vector2(700,160) };
-        for (int i = 0; i < 4; i++)
-        {
-            int level = i + 1;
-            Button(route.transform, "关卡 " + level, new Vector2(305,120), positions[i], () => OpenIntro(level), 38);
+            Button(select.transform, StageNames[i], new Vector2(830,290), positions[i], () => OpenIntro(index), 70);
         }
     }
 
@@ -185,13 +179,13 @@ public sealed class GameUI : MonoBehaviour
         introTitle = Label(intro.transform, "", new Vector2(700,120), new Vector2(465,230), 58);
         introBody = Label(intro.transform, "", new Vector2(700,320), new Vector2(465,35), 34);
         Button(intro.transform, "开始", new Vector2(540,100), new Vector2(465,-350), StartBattle, 42);
-        Button(intro.transform, "×", new Vector2(100,100), new Vector2(850,450), () => Show(route), 60);
+        Button(intro.transform, "×", new Vector2(100,100), new Vector2(850,450), () => Show(select), 60);
     }
 
-    void OpenIntro(int level)
+    void OpenIntro(int selectedStageIndex)
     {
-        levelIndex = level;
-        introTitle.text = StageNames[stageIndex] + " · 关卡 " + level;
+        stageIndex = selectedStageIndex;
+        introTitle.text = StageNames[stageIndex];
         introBody.text = "战场：" + StageNames[stageIndex] + "\n\n我方可使用通用兵种和该地形专属兵种。\n\n关卡内容与背景插画待完善。";
         Show(intro);
     }
@@ -202,7 +196,8 @@ public sealed class GameUI : MonoBehaviour
     {
         battle = Screen("战斗界面", false);
         Button(battle.transform, "Ⅱ", new Vector2(100,100), new Vector2(-855,460), OpenPause, 52);
-        costText = Label(battle.transform, "费用 0 / 总回复 0/50", new Vector2(600,90), new Vector2(-340,460), 36);
+        costText = Label(battle.transform, "费用 0 / 总回复 0/100", new Vector2(600,90), new Vector2(-340,460), 36);
+        roundText = Label(battle.transform, "第 1/4 回合  防守", new Vector2(860,90), new Vector2(370,460), 30);
         Panel("底部操作区", battle.transform, new Vector2(1920,330), new Vector2(0,-375), new Color(.12f,.19f,.23f,.88f));
         for (int i = 0; i < 4; i++)
         {
@@ -215,7 +210,7 @@ public sealed class GameUI : MonoBehaviour
         Button(battle.transform, "进攻", new Vector2(400,110), new Vector2(690,-260), () => SetOrder("进攻"), 36);
         Button(battle.transform, "撤退", new Vector2(400,110), new Vector2(690,-380), () => SetOrder("撤退"), 36);
         Button(battle.transform, "防御", new Vector2(400,110), new Vector2(690,-500), () => SetOrder("防御"), 36);
-        BuildPause(); BuildResult();
+        BuildPause(); BuildResult(); BuildRoundComplete();
     }
 
     void SpawnUnit(int slot)
@@ -226,7 +221,12 @@ public sealed class GameUI : MonoBehaviour
         if (stats == null || !cost.CanAfford(stats.cost)) return;
         var position = new Vector3(-118f, 0f, Random.Range(-24f, 24f));
         var soldier = pool.Spawn(id, position, Quaternion.identity);
-        if (soldier != null) cost.TrySpend(stats.cost);
+        if (soldier != null)
+        {
+            soldier.GetComponent<UnitCombat>().SetOrder(order == "进攻" ? UnitCombat.Order.Attack :
+                order == "撤退" ? UnitCombat.Order.Retreat : UnitCombat.Order.Defense);
+            cost.TrySpend(stats.cost);
+        }
     }
 
     UnitStats FindUnit(int id)
@@ -234,7 +234,16 @@ public sealed class GameUI : MonoBehaviour
         return id > 0 && pool != null ? pool.GetUnitStats(id) : null;
     }
 
-    void SetOrder(string next) { order = next; Debug.Log("Selected order: " + order + ". Unit AI is not implemented yet."); }
+    void SetOrder(string next)
+    {
+        order = next;
+        var command = next == "进攻" ? UnitCombat.Order.Attack :
+            next == "撤退" ? UnitCombat.Order.Retreat : UnitCombat.Order.Defense;
+        foreach (var soldier in FindObjectsOfType<UnitCombat>())
+            if (soldier.IsPlayer && soldier.IsAlive) soldier.SetOrder(command);
+    }
+
+    public void ResetOrder() => order = "防御";
 
     void BuildPause()
     {
@@ -256,6 +265,30 @@ public sealed class GameUI : MonoBehaviour
         result.SetActive(false);
     }
 
+    void BuildRoundComplete()
+    {
+        roundComplete = Screen("回合结束占位界面");
+        Label(roundComplete.transform, "本回合目标完成", new Vector2(1200,180), new Vector2(0,200), 70);
+        Label(roundComplete.transform, "回合之间的内容待添加；场上我方士兵会保留。",
+            new Vector2(1400,150), new Vector2(0,10), 38);
+        Button(roundComplete.transform, "临时继续下一回合", new Vector2(800,140),
+            new Vector2(0,-240), ContinueRound, 44);
+        roundComplete.SetActive(false);
+    }
+
+    public void ShowRoundComplete(int completedRound)
+    {
+        Time.timeScale = 0f;
+        Show(roundComplete);
+    }
+
+    void ContinueRound()
+    {
+        Time.timeScale = 1f;
+        roundManager.AdvanceRound();
+        Show(battle);
+    }
+
     public void ShowResult(bool victory, string message)
     {
         Time.timeScale = 0;
@@ -271,7 +304,7 @@ public sealed class GameUI : MonoBehaviour
 
     void Show(GameObject target)
     {
-        foreach (var screen in new[] { menu, select, route, intro, battle, pause, result })
+        foreach (var screen in new[] { menu, select, intro, battle, pause, result, roundComplete })
             if (screen != null) screen.SetActive(screen == target);
     }
 

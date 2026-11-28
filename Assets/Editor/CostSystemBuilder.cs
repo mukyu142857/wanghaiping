@@ -33,7 +33,7 @@ public static class CostSystemBuilder
                 if (openedHere) EditorSceneManager.CloseScene(scene, true);
                 return;
             }
-        var wallet = new GameObject("Battle Cost (finite 50 points)");
+        var wallet = new GameObject("Battle Cost (finite 100 points)");
         SceneManager.MoveGameObjectToScene(wallet, scene);
         wallet.AddComponent<BattleCost>();
         EditorSceneManager.SaveScene(scene);

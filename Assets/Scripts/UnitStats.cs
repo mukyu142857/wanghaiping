@@ -19,6 +19,5 @@ public sealed class UnitStats : MonoBehaviour
     [Min(0.01f)] public float attackIntervalSeconds;
     [TextArea(2, 4)] public string specialMechanic;
 
-    // Values above use Unity units: 100 pixels = 1 unit. This component stores
-    // design data only; movement, attacks, and special effects are not active yet.
+    // Values above use Unity units: 100 pixels = 1 unit.
 }

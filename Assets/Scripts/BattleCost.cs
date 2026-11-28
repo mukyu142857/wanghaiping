@@ -2,8 +2,8 @@ using UnityEngine;
 
 public sealed class BattleCost : MonoBehaviour
 {
-    [SerializeField, Min(0)] int totalSupply = 50;
-    [SerializeField, Min(0.01f)] float secondsPerPoint = 1f;
+    [SerializeField, Min(0)] int totalSupply = 100;
+    [SerializeField, Min(0.01f)] float secondsPerPoint = 1.2f;
     [SerializeField] bool showHud = true;
 
     public CostLedger Ledger { get; private set; }
@@ -21,6 +21,7 @@ public sealed class BattleCost : MonoBehaviour
 
     public bool CanAfford(int amount) => Ledger != null && Ledger.CanAfford(amount);
     public bool TrySpend(int amount) => Ledger != null && Ledger.TrySpend(amount);
+    public void ResetRound() => Ledger?.Reset();
     public void SetHudVisible(bool visible) => showHud = visible;
 
     void OnGUI()

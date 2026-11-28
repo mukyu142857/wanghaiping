@@ -11,7 +11,7 @@ public sealed class CostLedger
 
     public event Action Changed = delegate { };
 
-    public CostLedger(int totalSupply = 50, float secondsPerPoint = 1f)
+    public CostLedger(int totalSupply = 100, float secondsPerPoint = 1.2f)
     {
         if (totalSupply < 0) throw new ArgumentOutOfRangeException(nameof(totalSupply));
         if (secondsPerPoint <= 0 || float.IsNaN(secondsPerPoint) || float.IsInfinity(secondsPerPoint))
@@ -45,5 +45,13 @@ public sealed class CostLedger
         Current -= amount;
         Changed?.Invoke();
         return true;
+    }
+
+    public void Reset()
+    {
+        Current = 0;
+        Generated = 0;
+        elapsed = 0f;
+        Changed?.Invoke();
     }
 }
